@@ -1,7 +1,7 @@
 import ReconnectingWebSocket from "reconnecting-websocket";
 import store, { Extension, LogMessage, OnlineOrOffline } from "./store";
 import { BridgeConfig, BridgeInfo, TouchLinkDevice, Device, DeviceState, BridgeState, Group } from './types';
-import { sanitizeGraph, isSecurePage, randomString, stringifyWithPreservingUndefinedAsNull } from "./utils";
+import { sanitizeGraph, isSecurePage, randomString, stringifyWithPreservingUndefinedAsNull, debounceArgs } from "./utils";
 import { Notyf } from "notyf";
 import { GraphI } from "./components/map/types";
 import { local } from "@toolz/local-storage";
@@ -11,12 +11,12 @@ const TOKEN_LOCAL_STORAGE_ITEM_NAME = "z2m-token-v2";
 const AUTH_FLAG_LOCAL_STORAGE_ITEM_NAME = "z2m-auth-v2";
 const UNAUTHORIZED_ERROR_CODE = 4401;
 
-const AVALIABILITY_FEATURE_TOPIC_ENDING = "/availability";
+const AVAILABILITY_FEATURE_TOPIC_ENDING = "/availability";
 const notyf = new Notyf();
 
 interface Message {
     topic: string;
-    payload: string | object | object[] | string[];
+    payload: string | Record<string, unknown> | Record<string, unknown>[] | string[];
 }
 
 const blacklistedMessages: RegExp[] = [
@@ -31,7 +31,7 @@ const isResponseWithStatus = (msg: LogMessage | ResponseWithStatus): msg is Resp
     return (msg as ResponseWithStatus).status !== undefined;
 }
 
-const showNotity = (data: LogMessage | ResponseWithStatus): void => {
+const showNotify = (data: LogMessage | ResponseWithStatus): void => {
     let message = "", level = "";
     if (isLogMessage(data)) {
         message = data.message;
@@ -72,21 +72,23 @@ interface Callable {
     (): void;
 }
 
+const apiDebounceDelay = 250;
+
 class Api {
     url: string;
     socket: ReconnectingWebSocket;
     requests: Map<string, [Callable, Callable]> = new Map<string, [Callable, Callable]>();
     transactionNumber = 1;
-    transactionRndPreffix: string;
+    transactionRndPrefix: string;
     constructor(url: string) {
         this.url = url;
-        this.transactionRndPreffix = randomString(5);
+        this.transactionRndPrefix = randomString(5);
     }
     send = (topic: string, payload: Record<string, unknown>): Promise<void> => {
         console.debug("Calling API", { topic, payload });
 
         if (topic.startsWith('bridge/request/')) {
-            const transaction = `${this.transactionRndPreffix}-${this.transactionNumber++}`;
+            const transaction = `${this.transactionRndPrefix}-${this.transactionNumber++}`;
             const promise = new Promise<void>((resolve, reject) => {
                 this.requests.set(transaction, [resolve, reject]);
             });
@@ -119,22 +121,25 @@ class Api {
         this.socket.addEventListener("message", this.onMessage);
         this.socket.addEventListener("close", this.onClose);
     }
-    private processDeviceStateMessage = (data: Message): void => {
+    private processDeviceStateMessage = debounceArgs((messages: Message[]): void => {
         let { deviceStates } = store.getState();
-        deviceStates = { ...deviceStates, ...{ [data.topic]: { ...deviceStates[data.topic], ...(data.payload as DeviceState) } } };
+        messages.forEach(data => {
+            deviceStates = { ...deviceStates, ...{ [data.topic]: { ...deviceStates[data.topic], ...(data.payload as DeviceState) } } };
+        });
         store.setState({ deviceStates });
-    }
-    private procsessBridgeMessage = (data: Message): void => {
+    }, { trailing: true, maxWait: apiDebounceDelay }) as (data: Message) => void;
+
+    private processBridgeMessage = (data: Message): void => {
         switch (data.topic) {
             case "bridge/config":
                 store.setState({
-                    bridgeConfig: data.payload as BridgeConfig
+                    bridgeConfig: data.payload as unknown as BridgeConfig
                 });
                 break;
 
             case "bridge/info":
                 store.setState({
-                    bridgeInfo: data.payload as BridgeInfo
+                    bridgeInfo: data.payload as unknown as BridgeInfo
                 });
                 break;
 
@@ -147,7 +152,7 @@ class Api {
             case "bridge/devices":
                 {
                     const devicesMap = {};
-                    (data.payload as Device[]).forEach((device) => {
+                    (data.payload as unknown as Device[]).forEach((device) => {
                         devicesMap[device.ieee_address] = device;
                     });
                     store.setState({
@@ -158,7 +163,7 @@ class Api {
 
             case "bridge/groups":
                 store.setState({
-                    groups: data.payload as Group[]
+                    groups: data.payload as unknown as Group[]
                 })
                 break;
 
@@ -176,18 +181,18 @@ class Api {
                 {
                     const { logs } = store.getState();
                     const newLogs = [...logs.slice(-MAX_LOGS_RECORDS_IN_BUFFER)];
-                    newLogs.push(data.payload as LogMessage);
+                    newLogs.push(data.payload as unknown as LogMessage);
                     store.setState({ logs: newLogs });
-                    const log = data.payload as LogMessage;
+                    const log = data.payload as unknown as LogMessage;
                     if (blacklistedMessages.every(val => !val.test(log.message))) {
-                        showNotity(log);
+                        showNotify(log);
                     }
                 }
                 break;
 
             case "bridge/response/networkmap":
                 {
-                    const response = data.payload as ResponseWithStatus;
+                    const response = data.payload as unknown as ResponseWithStatus;
                     if (response.status == "ok") {
                         const { value } = response.data as { value: unknown };
                         store.setState({
@@ -203,7 +208,7 @@ class Api {
 
             case "bridge/response/touchlink/scan":
                 {
-                    const { status, data: payloadData } = data.payload as TouchllinkScanResponse;
+                    const { status, data: payloadData } = data.payload as unknown as TouchllinkScanResponse;
                     if (status === "ok") {
                         store.setState({ touchlinkScanInProgress: false, touchlinkDevices: payloadData.found });
                     } else {
@@ -225,17 +230,19 @@ class Api {
                 break;
         }
         if (data.topic.startsWith("bridge/response/")) {
-            showNotity(data.payload as ResponseWithStatus);
-            this.resolvePromises(data.payload as ResponseWithStatus);
+            showNotify(data.payload as unknown as ResponseWithStatus);
+            this.resolvePromises(data.payload as unknown as ResponseWithStatus);
         }
     }
 
-    private processAvailabilityMessage = (data: Message): void => {
-        let { avalilability } = store.getState();
-        const friendlyName = data.topic.split(AVALIABILITY_FEATURE_TOPIC_ENDING, 1)[0];
-        avalilability = { ...avalilability, ...{ [friendlyName]: data.payload as OnlineOrOffline}};
-        store.setState({ avalilability });
-    }
+    private processAvailabilityMessage = debounceArgs((messages: Message[]): void => {
+        let { availability } = store.getState();
+        messages.forEach(data => {
+            const friendlyName = data.topic.split(AVAILABILITY_FEATURE_TOPIC_ENDING, 1)[0];
+            availability = { ...availability, ...{ [friendlyName]: data.payload as OnlineOrOffline } };
+        });
+        store.setState({ availability });
+    }, { trailing: true, maxWait: apiDebounceDelay }) as (data: Message) => void;
 
     private resolvePromises(message: ResponseWithStatus): void {
         const { transaction, status } = message;
@@ -265,17 +272,18 @@ class Api {
         let data = {} as Message;
         try {
             data = JSON.parse(event.data) as Message;
+            if (data.topic.endsWith(AVAILABILITY_FEATURE_TOPIC_ENDING)) {
+                this.processAvailabilityMessage(data);
+            } else if (data.topic.startsWith("bridge/")) {
+                this.processBridgeMessage(data);
+            } else {
+                this.processDeviceStateMessage(data);
+            }
         } catch (e) {
             notyf.error(e.message);
-            notyf.error(event.data);
+            console.error(event.data);
         }
-        if (data.topic.endsWith(AVALIABILITY_FEATURE_TOPIC_ENDING)) {
-            this.processAvailabilityMessage(data);
-        } else if (data.topic.startsWith("bridge/")) {
-            this.procsessBridgeMessage(data);
-        } else {
-            this.processDeviceStateMessage(data);
-        }
+
     }
 }
 const apiUrl = `${window.location.host}${document.location.pathname}api`;

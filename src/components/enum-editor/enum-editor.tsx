@@ -1,6 +1,7 @@
 import React, { FunctionComponent } from "react";
 import Button from "../button";
 import cx from "classnames";
+import { DisplayValue } from "../display-value/DisplayValue";
 type Primitive = number | string;
 
 export type ValueWithLabel = {
@@ -33,7 +34,7 @@ const EnumEditor: FunctionComponent<EnumProps> = (props) => {
         }
         return <select className="form-control" onChange={onSelectChange}
             value={isPrimitive(value as ValueWithLabelOrPrimitive) ? value as string : (value as ValueWithLabel).value}>
-            <option key="hidded" hidden>----</option>
+            <option key="hided" hidden>----</option>
             {values.map(v => <option
                 key={isPrimitive(v) ? v : v.name}
                 value={isPrimitive(v) ? v : v.value}>{isPrimitive(v) ? v : v.name}
@@ -49,7 +50,7 @@ const EnumEditor: FunctionComponent<EnumProps> = (props) => {
                 key={isPrimitive(v) ? v : v.name}
                 item={isPrimitive(v) ? v : v.value}
                 title={isPrimitive(v) ? v as string : v.description}
-            >{isPrimitive(v) ? v : v.name}</Button>)
+            >{isPrimitive(v) ? <DisplayValue value={v} name=""/> : v.name}</Button>)
         }
     </div>;
 }

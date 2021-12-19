@@ -1,7 +1,7 @@
 import camelCase from "lodash/camelCase";
 import startCase from "lodash/startCase";
 import React, { FunctionComponent, PropsWithChildren } from "react";
-import { FetatureWrapperProps } from "../features/composite/FeatureWrapper";
+import { FeatureWrapperProps } from "../features/composite/FeatureWrapper";
 import cx from "classnames";
 import { useTranslation } from "react-i18next";
 
@@ -18,8 +18,6 @@ const getTemperatureIcon = (temperature: number) => {
     }
     return icon;
 };
-
-
 
 const typeToClassMap = {
     humidity: ['text-info', 'fa-tint'],
@@ -48,9 +46,12 @@ const typeToClassMap = {
     color_temp: ['fa-sliders-h'],
     illuminance_lux: ['fa-sun'],
     soil_moisture: ['fa-fill-drip'],
-    week: ['fa-calendar-week'],
     water_leak: ['fa-water'],
+    week: ['fa-calendar-week'],
+    workdays_schedule: ['fa-calendar-day', 'text-info'],
+    holidays_schedule: ['fa-calendar-day', 'text-danger'],
 };
+
 const getGenericFeatureIcon = (name: string, value: unknown): string => {
     let classes = [] as string[];
     switch (name) {
@@ -77,7 +78,7 @@ const getGenericFeatureIcon = (name: string, value: unknown): string => {
     return cx(classes);
 }
 
-export const DashboardFeatureWrapper: FunctionComponent<PropsWithChildren<FetatureWrapperProps>> = (props) => {
+export const DashboardFeatureWrapper: FunctionComponent<PropsWithChildren<FeatureWrapperProps>> = (props) => {
     const { children, feature, deviceState = {} } = props;
     const icon = getGenericFeatureIcon(feature.name, deviceState[feature.property]);
     const { t } = useTranslation(['featureNames']);

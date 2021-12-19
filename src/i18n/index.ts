@@ -2,10 +2,6 @@ import i18n, { ResourceLanguage } from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import { register } from "timeago.js"
 import LanguageDetector from 'i18next-browser-languagedetector';
-import set from "lodash/set";
-
-import store from "./../store";
-
 import enTranslations from './locales/en.json';
 import frTranslations from './locales/fr.json';
 import plTranslations from './locales/pl.json';
@@ -39,8 +35,6 @@ import timeKo from "timeago.js/lib/lang/ko";
 import timeCs from "timeago.js/lib/lang/cs";
 import timeFi from "timeago.js/lib/lang/fi";
 import timeSv from "timeago.js/lib/lang/sv";
-
-import { useEffect } from 'react';
 
 
 register("pl", timePl);
@@ -82,19 +76,6 @@ export const resources = {
 
 } as const;
 
-declare let window: Record<string, unknown>;
-window.missing = {};
-
-const blacklistedNamespaces = ['localeNames'];
-const missingKeyHandler = (lngs: string[], ns: string, key: string, fallbackValue: string) => {
-
-    if (!blacklistedNamespaces.includes(ns)) {
-        // eslint-disable-next-line @typescript-eslint/ban-types
-        set(window.missing as object, [ns, key], fallbackValue);
-        store.setState({ missingTranslations: window.missing as Map<string, unknown> });
-        //then use `copy(window.missing)` in chrome dev tools console
-    }
-}
 const debug = process.env.NODE_ENV !== 'production'
 i18n.on("languageChanged", (lng: string) => {
     document.documentElement.lang = lng;
@@ -103,12 +84,10 @@ i18n
     .use(LanguageDetector)
     .use(initReactI18next)
     .init({
-        // fallbackLng: 'en',
+        fallbackLng: 'en',
         debug,
         resources,
         ns: Object.keys(enTranslations),
-        saveMissing: true,
-        missingKeyHandler
     })
 
 

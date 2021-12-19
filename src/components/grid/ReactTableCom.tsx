@@ -39,15 +39,19 @@ function GlobalFilter({
   )
 }
 
-const TABLE_STORAGE_PREFFIX = 'z2m-';
-const getStorageKey = (id: string) => `${TABLE_STORAGE_PREFFIX}${id}`;
+const TABLE_STORAGE_PREFIX = 'z2m-';
+const getStorageKey = (id: string) => `${TABLE_STORAGE_PREFIX}${id}`;
 
 const persist = debounce((key: string, data: Record<string, unknown>): void => {
   local.setItem(getStorageKey(key), data);
 })
 
 
-const stateReducer = (newState: TableState<any>, action: ActionType, previousState: TableState<any>, instance?: TableInstance<any>): TableState<any> => {
+const stateReducer = (
+    newState: TableState<Record<string, unknown>>,
+    action: ActionType,
+    previousState: TableState<Record<string, unknown>>,
+    instance?: TableInstance<any>): TableState<Record<string, unknown>> => {
   if (instance) {
     const { instanceId } = instance;
     const { sortBy, globalFilter } = newState;
@@ -59,7 +63,7 @@ const stateReducer = (newState: TableState<any>, action: ActionType, previousSta
 
 
 export const Table: React.FC<Props> = ({ columns, data, id }) => {
-  const initialState = local.getItem<Partial<TableState<any>>>(getStorageKey(id)) || {};
+  const initialState = local.getItem<Partial<TableState<Record<string, unknown>>>>(getStorageKey(id)) || {};
   const {
     getTableProps,
     getTableBodyProps,
@@ -69,7 +73,7 @@ export const Table: React.FC<Props> = ({ columns, data, id }) => {
     state,
     visibleColumns,
     setGlobalFilter,
-  } = useTable<any>(
+  } = useTable<Record<string, unknown>>(
     {
       instanceId: id,
       stateReducer,
@@ -88,26 +92,24 @@ export const Table: React.FC<Props> = ({ columns, data, id }) => {
     <table {...getTableProps()} className="table responsive">
       <thead>
         <tr>
-          <th
-            colSpan={visibleColumns.length}
-          >
+          <th colSpan={visibleColumns.length}>
             <GlobalFilter
               globalFilter={state.globalFilter}
               setGlobalFilter={setGlobalFilter}
             />
           </th>
         </tr>
-        {headerGroups.map((headerGroup: HeaderGroup<any>) => (
+        {headerGroups.map((headerGroup: HeaderGroup<Record<string, unknown>>) => (
           <tr {...headerGroup.getHeaderGroupProps()}>
             {headerGroup.headers.map(column => (
               <th className="text-nowrap" {...column.getHeaderProps(column.getSortByToggleProps())}>
                 <span className={cx({ 'btn-link mr-1': column.canSort })}>{column.render('Header')}</span>
                 <span>
-                <i className={cx('fa', {
-                  'fa-sort-amount-down invisible': !column.isSorted,
-                  'fa-sort-amount-down-alt': column.isSorted && !column.isSortedDesc,
-                  'fa-sort-amount-down': column.isSorted && column.isSortedDesc,
-                })} />
+                  <i className={cx('fa', {
+                    'fa-sort-amount-down invisible': !column.isSorted,
+                    'fa-sort-amount-down-alt': column.isSorted && !column.isSortedDesc,
+                    'fa-sort-amount-down': column.isSorted && column.isSortedDesc,
+                  })} />
                 </span>
               </th>
             ))}
@@ -128,6 +130,5 @@ export const Table: React.FC<Props> = ({ columns, data, id }) => {
         )}
       </tbody>
     </table>
-
   )
 }

@@ -1,10 +1,11 @@
 
-import { AdvancedConfig, Device, DeviceState, Endpoint, Group, LastSeenType } from "./types";
+import { Device, DeviceState, Endpoint, Group, LastSeenType } from "./types";
 import { GraphI, LinkI, LinkType, NodeI } from "./components/map/types";
 import { Theme } from "./components/theme-switcher";
 import JSZip from 'jszip';
 import FileSaver from 'file-saver';
 import { local } from "@toolz/local-storage";
+import debounce from "lodash/debounce";
 
 
 export const genDeviceDetailsLink = (deviceIdentifier: string | number): string => (`/device/${deviceIdentifier}`);
@@ -45,7 +46,7 @@ export const lastSeen = (state: DeviceState, lastSeenType: LastSeenType): Date |
             return new Date(Date.parse(state.last_seen as string));
 
         case "epoch":
-            return new Date(state.last_seen as number);        
+            return new Date(state.last_seen as number);
 
         case "disable":
             return undefined;
@@ -81,7 +82,7 @@ export const sanitizeGraph = (inGraph: GraphI): GraphI => {
                 links.set(linkId, { ...link, ...{ source: src, target: dst, linkType, linkqualities: [link.linkquality], relationships: [link.relationship] } });
             }
         } else {
-            console.warn(`Broken link${src ? "": " ,source node is missing"}${dst ? "": " ,target node is missing"}`, link);
+            console.warn(`Broken link${src ? "" : " ,source node is missing"}${dst ? "" : " ,target node is missing"}`, link);
         }
     });
 
@@ -103,9 +104,7 @@ export const scale = (inputY: number, yRange: Array<number>, xRange: Array<numbe
     const [yMin, yMax] = yRange;
 
     const percent = (inputY - yMin) / (yMax - yMin);
-    const outputX = percent * (xMax - xMin) + xMin;
-
-    return outputX;
+    return percent * (xMax - xMin) + xMin;
 };
 
 
@@ -142,3 +141,18 @@ const THEME_STORAGE_KEY = 'z2m-theme';
 
 export const getCurrentTheme = (): Theme => local.getItem(THEME_STORAGE_KEY) as Theme ?? 'light';
 export const saveCurrentTheme = (theme: string): void => local.setItem(THEME_STORAGE_KEY, theme);
+
+
+export const debounceArgs = (fn: (...args: any) => any, options?: Record<string, any>) => {
+    let __dbArgs: any[] = [];
+    
+    const __dbFn = debounce(() => {
+        fn.call(undefined, __dbArgs);
+        __dbArgs = []
+    // @ts-ignore
+    }, options);
+    return (...args) => {
+        __dbArgs.push(...args);
+        __dbFn();
+    }
+};
